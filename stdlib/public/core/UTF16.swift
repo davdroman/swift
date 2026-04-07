@@ -458,10 +458,10 @@ typealias CodeUnitBlock = SIMD8<UInt16>
 typealias ByteBlock = SIMD16<UInt8>
 typealias ByteHalfBlock = SIMD8<UInt8>
 #else
-@_transparent var blockSize:Int { 16 }
-typealias CodeUnitBlock = SIMD16<UInt16>
-typealias ByteBlock = SIMD32<UInt8>
-typealias ByteHalfBlock = SIMD16<UInt8>
+@_transparent var blockSize:Int { 8 }
+typealias CodeUnitBlock = SIMD8<UInt16>
+typealias ByteBlock = SIMD16<UInt8>
+typealias ByteHalfBlock = SIMD8<UInt8>
 #endif
 
 @_transparent
@@ -476,8 +476,7 @@ func allASCIIBlock(at pointer: UnsafePointer<UInt16>) -> ByteHalfBlock? {
 @_transparent
 func fastUTF8LengthOfBlock(at pointer: UnsafePointer<UInt16>) -> UInt16? {
   let block = unsafe UnsafeRawPointer(pointer).loadUnaligned(as: CodeUnitBlock.self)
-  let multiByteLanes = block .> utf8OneByteMax
-  if !any(multiByteLanes) {
+  if block.max() <= utf8OneByteMax {
     return UInt16(truncatingIfNeeded: blockSize)
   }
   let surrogates = (block .>= utf16LeadSurrogateMin) .& (block .<= utf16SurrogateMax)
@@ -486,7 +485,7 @@ func fastUTF8LengthOfBlock(at pointer: UnsafePointer<UInt16>) -> UInt16? {
   }
   // Everything is 1, 2, or 3-byte BMP
   return CodeUnitBlock.one
-      .replacing(with: 2, where: multiByteLanes)
+      .replacing(with: 2, where: block .> utf8OneByteMax)
       .replacing(with: 3, where: block .> utf8TwoByteMax)
       .wrappedSum()
 }
@@ -733,7 +732,6 @@ internal func transcodeUTF16ToUTF8(
   return unsafe (output - outputStart, repairsMade: repairsMade)
 }
 
-@inline(__always)
 private func utf8Length(
   input: inout UnsafePointer<Unicode.UTF16.CodeUnit>,
   end: UnsafePointer<Unicode.UTF16.CodeUnit>,
@@ -782,7 +780,7 @@ internal func utf8Length(
 ) -> (Int, isASCII: Bool)? {
   let inCount = UTF16CodeUnits.count
   guard inCount > 0 else { return (0, isASCII: true) }
-  var input = unsafe UTF16CodeUnits.baseAddress.unsafelyUnwrapped
+  var input = unsafe UTF16CodeUnits.baseAddress._unsafelyUnwrappedUnchecked
   let inputEnd = unsafe input + inCount
   var count = 0
 

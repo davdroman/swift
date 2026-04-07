@@ -392,15 +392,23 @@ extension SIMD where Scalar: Comparable {
   }
   
   /// The least element in the vector.
-  @_alwaysEmitIntoClient
+  @_transparent
   public func min() -> Scalar {
-    return indices.reduce(into: self[0]) { $0 = Swift.min($0, self[$1]) }
+    var result = self[0]
+    for i in 1 ..< scalarCount {
+      result = Swift.min(result, self[i])
+    }
+    return result
   }
   
   /// The greatest element in the vector.
-  @_alwaysEmitIntoClient
+  @_transparent
   public func max() -> Scalar {
-    return indices.reduce(into: self[0]) { $0 = Swift.max($0, self[$1]) }
+    var result = self[0]
+    for i in 1 ..< scalarCount {
+      result = Swift.max(result, self[i])
+    }
+    return result
   }
 }
 
@@ -854,7 +862,7 @@ extension SIMD where Scalar: FixedWidthInteger {
   /// addition.
   ///
   /// Equivalent to `indices.reduce(into: 0) { $0 &+= self[$1] }`.
-  @_alwaysEmitIntoClient
+  @_transparent
   public func wrappedSum() -> Scalar {
     var result: Scalar = 0
     for i in indices {
@@ -919,15 +927,23 @@ extension SIMD where Scalar: FloatingPoint {
   }
   
   /// The least scalar in the vector.
-  @_alwaysEmitIntoClient
+  @_transparent
   public func min() -> Scalar {
-    return indices.reduce(into: self[0]) { $0 = Scalar.minimum($0, self[$1]) }
+    var result = -Scalar.zero
+    for i in indices {
+      result = Scalar.minimum(result, self[i])
+    }
+    return result
   }
   
   /// The greatest scalar in the vector.
-  @_alwaysEmitIntoClient
+  @_transparent
   public func max() -> Scalar {
-    return indices.reduce(into: self[0]) { $0 = Scalar.maximum($0, self[$1]) }
+    var result = -Scalar.zero
+    for i in indices {
+      result = Scalar.maximum(result, self[i])
+    }
+    return result
   }
   
   /// The sum of the scalars in the vector.
@@ -1537,13 +1553,13 @@ extension SIMDMask {
 }
 
 /// True if any lane of mask is true.
-@_alwaysEmitIntoClient
+@_transparent
 public func any<Storage>(_ mask: SIMDMask<Storage>) -> Bool {
   return mask._storage.min() < 0
 }
 
 /// True if every lane of mask is true.
-@_alwaysEmitIntoClient
+@_transparent
 public func all<Storage>(_ mask: SIMDMask<Storage>) -> Bool {
   return mask._storage.max() < 0
 }
