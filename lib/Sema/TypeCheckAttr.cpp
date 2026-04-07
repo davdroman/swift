@@ -5121,8 +5121,12 @@ AttributeChecker::visitImplementationOnlyAttr(ImplementationOnlyAttr *attr) {
 
   auto *VD = cast<ValueDecl>(D);
 
-  // @_implementationOnly on types only applies to non-public types.
-  if (isa<NominalTypeDecl>(D)) {
+  // @_implementationOnly on types only applies to non-public types and
+  // classes stored properties.
+  auto *varDecl = dyn_cast<VarDecl>(VD);
+  if (isa<NominalTypeDecl>(D) ||
+      (varDecl && varDecl->hasStorage() &&
+       isa<ClassDecl>(varDecl->getDeclContext()))) {
     auto access =
         VD->getFormalAccessScope(/*useDC=*/nullptr,
                                  /*treatUsableFromInlineAsPublic=*/true);
@@ -5422,10 +5426,18 @@ void suggestAnyAppleOSAvailability(const Decl *D,
   os << "anyAppleOS " << commonVersion;
 
   auto groupHead = attrGroups.front();
+
+  // Get the location of the @available attr's right paren.
   SourceLoc groupEndLoc = groupHead->getEndLoc();
+
+  // Build up the fix-it contents and find the starting source loc for the
+  // availability specs.
+  SourceLoc groupStartLoc = groupHead->getDomainLoc();
   for (auto *member = groupHead; member != nullptr;
        member = member->getNextGroupedAvailableAttr()) {
-    groupEndLoc = member->getEndLoc();
+    // The attributes are enumerated in reverse, so the group's starting loc
+    // is the last domain loc we see.
+    groupStartLoc = member->getDomainLoc();
     if (remainingAttrsToSkip.erase(member))
       continue;
     if (auto semAttr = D->getSemanticAvailableAttr(member)) {
@@ -5441,14 +5453,15 @@ void suggestAnyAppleOSAvailability(const Decl *D,
   if (remainingAttrsToSkip.empty()) {
     // Make sure we have a valid source range in a single buffer. We might not
     // if some attributes were expanded from an availability macro.
-    auto range = SourceRange(groupHead->getDomainLoc(), groupEndLoc);
-    auto startBuffer = ctx.SourceMgr.findBufferContainingLoc(range.Start);
-    auto endBuffer = ctx.SourceMgr.findBufferContainingLoc(range.End);
+    if (groupStartLoc.isInvalid() || groupEndLoc.isInvalid())
+      return;
+
+    auto startBuffer = ctx.SourceMgr.findBufferContainingLoc(groupStartLoc);
+    auto endBuffer = ctx.SourceMgr.findBufferContainingLoc(groupEndLoc);
     if (startBuffer != endBuffer)
       return;
 
-    diag.fixItReplace(SourceRange(groupHead->getDomainLoc(), groupEndLoc),
-                      replacement);
+    diag.fixItReplaceChars(groupStartLoc, groupEndLoc, replacement);
   }
 }
 
