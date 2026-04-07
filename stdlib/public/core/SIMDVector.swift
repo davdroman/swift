@@ -929,8 +929,8 @@ extension SIMD where Scalar: FloatingPoint {
   /// The least scalar in the vector.
   @_transparent
   public func min() -> Scalar {
-    var result = -Scalar.zero
-    for i in indices {
+    var result = self[0]
+    for i in 1 ..< scalarCount {
       result = Scalar.minimum(result, self[i])
     }
     return result
@@ -939,8 +939,8 @@ extension SIMD where Scalar: FloatingPoint {
   /// The greatest scalar in the vector.
   @_transparent
   public func max() -> Scalar {
-    var result = -Scalar.zero
-    for i in indices {
+    var result = self[0]
+    for i in 1 ..< scalarCount {
       result = Scalar.maximum(result, self[i])
     }
     return result
