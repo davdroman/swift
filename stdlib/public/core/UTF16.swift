@@ -467,10 +467,10 @@ typealias ByteHalfBlock = SIMD8<UInt8>
 @_transparent
 func allASCIIBlock(at pointer: UnsafePointer<UInt16>) -> ByteHalfBlock? {
   let block = unsafe UnsafeRawPointer(pointer).loadUnaligned(as: CodeUnitBlock.self)
-  if any(block .> utf8OneByteMax) {
-    return nil
+  if block.max() <= utf8OneByteMax {
+    return unsafe unsafeBitCast(block, to: ByteBlock.self).evenHalf
   }
-  return unsafe unsafeBitCast(block, to: ByteBlock.self).evenHalf
+  return nil
 }
 
 @_transparent
