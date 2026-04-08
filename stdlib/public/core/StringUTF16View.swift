@@ -1005,8 +1005,24 @@ extension String.UTF16View {
       if isASCII {
         _internalInvariant(range.lowerBound.transcodedOffset == 0)
         _internalInvariant(range.upperBound.transcodedOffset == 0)
+        #if SWIFT_STDLIB_ENABLE_VECTOR_TYPES
+        let utf8Base = unsafe utf8.baseAddress._unsafelyUnwrappedUnchecked
+        let bufBase = unsafe buffer.baseAddress._unsafelyUnwrappedUnchecked
+        let blockSize = 16
+        while readIdx &+ blockSize <= readEnd {
+          let srcBlock = unsafe UnsafeRawPointer(
+            utf8Base + readIdx
+          ).loadUnaligned(as: SIMD16<UInt8>.self)
+          for i in 0 ..< blockSize {
+            unsafe (bufBase + writeIdx + i).initialize(
+              to: UInt16(srcBlock[i]))
+          }
+          readIdx &+= blockSize
+          writeIdx &+= blockSize
+        }
+        #endif
         while readIdx < readEnd {
-          unsafe _internalInvariant(utf8[readIdx] < 0x80)
+          unsafe _internalInvariant(utf8[readIdx] <= utf8OneByteMax)
           unsafe buffer[_unchecked: writeIdx] = unsafe UInt16(
             truncatingIfNeeded: utf8[_unchecked: readIdx])
           readIdx &+= 1
@@ -1014,7 +1030,7 @@ extension String.UTF16View {
         }
         return
       }
-      
+
       // Handle mid-transcoded-scalar initial index
       if _slowPath(range.lowerBound.transcodedOffset != 0) {
         _internalInvariant(range.lowerBound.transcodedOffset == 1)
@@ -1025,9 +1041,32 @@ extension String.UTF16View {
         readIdx &+= len
         writeIdx &+= 1
       }
-      
+
       // Transcode middle
       while readIdx < readEnd {
+        #if SWIFT_STDLIB_ENABLE_VECTOR_TYPES
+        // Fast path: if the next 16 bytes are all ASCII, widen them directly
+        // without going through _decodeScalar. This is common in mixed-script
+        // strings that are predominantly ASCII (e.g. markup, source code with
+        // occasional non-ASCII identifiers).
+        let blockSize = 16
+        if readIdx &+ blockSize <= readEnd {
+          let srcBlock = unsafe UnsafeRawPointer(
+            utf8.baseAddress._unsafelyUnwrappedUnchecked + readIdx
+          ).loadUnaligned(as: SIMD16<UInt8>.self)
+          if srcBlock.max() <= utf8OneByteMax {
+            _onFastPath()
+            let bufBase = unsafe buffer.baseAddress._unsafelyUnwrappedUnchecked
+            for i in 0 ..< blockSize {
+              unsafe (bufBase + writeIdx + i).initialize(
+                to: UInt16(srcBlock[i]))
+            }
+            readIdx &+= blockSize
+            writeIdx &+= blockSize
+            continue
+          }
+        }
+        #endif
         let (scalar, len) = unsafe _decodeScalar(utf8, startingAt: readIdx)
         unsafe buffer[writeIdx] = scalar.utf16[0]
         readIdx &+= len
