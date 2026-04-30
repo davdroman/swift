@@ -233,7 +233,11 @@ getAvailabilityConstraintForAttr(const Decl *decl,
 
   // Is the decl obsoleted in this context?
   if (auto obsoletedRange = attr.getObsoletedRange(ctx)) {
-    if (availableRange && !context.getPlatformRange().isKnownUnreachable() &&
+    bool usePlatformRangeForReachability =
+        domain.isActivePlatform(ctx) || domain.isStandaloneSwiftRuntime();
+    bool contextIsReachable = !usePlatformRangeForReachability ||
+                              !context.getPlatformRange().isKnownUnreachable();
+    if (availableRange && contextIsReachable &&
         !availableRange->isKnownUnreachable() &&
         availableRange->isContainedIn(*obsoletedRange))
       return AvailabilityConstraint::unavailableObsolete(attr);
